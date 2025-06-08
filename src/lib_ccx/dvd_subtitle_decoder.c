@@ -384,7 +384,7 @@ int process_spu(struct lib_cc_decode *dec_ctx, unsigned char *buff, int length, 
 
 	if (ctx->append == 1)
 	{
-		memmove(ctx->buffer + ctx->len, buff, length);
+		memcpy(ctx->buffer + ctx->len, buff, length);
 		ctx->len += length;
 		ctx->append = 0;
 	}

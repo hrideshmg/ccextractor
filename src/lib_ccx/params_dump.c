@@ -216,8 +216,6 @@ void params_dump(struct lib_ccx_ctx *ctx)
 			mprint("Reduced color palette]\n");
 			break;
 	}
-
-	mprint("[Tesseract PSM: %d]\n", ccx_options.psm);
 }
 
 #define Y_N(cond) ((cond) ? "Yes" : "No")

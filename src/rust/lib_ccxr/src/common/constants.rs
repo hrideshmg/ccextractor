@@ -1,54 +1,28 @@
+//! Provides common constant types throughout the codebase.
+//! Rust equivalent for `ccx_common_constants.c` file in C.
+//!
+//! # Conversion Guide
+//!
+//! | From                           | To                                         |
+//! |--------------------------------|--------------------------------------------|
+//! | `ccx_avc_nal_types`            | [`AvcNalType`]                             |
+//! | `ccx_stream_type`              | [`StreamType`]                             |
+//! | `ccx_mpeg_descriptor`          | [`MpegDescriptor`]                         |
+//! | `ccx_datasource`               | [`DataSource`]                             |
+//! | `ccx_output_format`            | [`OutputFormat`]                           |
+//! | `ccx_stream_mode_enum`         | [`StreamMode`]                             |
+//! | `ccx_bufferdata_type`          | [`BufferdataType`]                         |
+//! | `ccx_frame_type`               | [`FrameType`]                              |
+//! | `ccx_code_type`                | [`Codec`]                                  |
+//! | `cdp_section_type`             | [`CdpSectionType`]                         |
+//! | `cc_types[4]`                  | [`CCTypes`]                                |
+//! | `CCX_TXT_*` macros             | [`CcxTxt`]                                 |
+//! | `language[NB_LANGUAGE]`        | [`Language`]                               |
+//! | `DEF_VAL_*` macros             | [`CreditTiming`]                           |
+//! | `IS_FEASIBLE` macro            | [`Codec::is_feasible`]                     |
+//! | `IS_VALID_TELETEXT_DESC` macro | [`MpegDescriptor::is_valid_teletext_desc`] |
+
 use std::ffi::OsStr;
-
-use strum_macros::{EnumString, FromRepr};
-
-pub const DTVCC_MAX_SERVICES: usize = 63;
-
-/// An enum of all the available formats for the subtitle output.
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OutputFormat {
-    #[default]
-    Raw,
-    Srt,
-    Sami,
-    Transcript,
-    Rcwt,
-    Null,
-    SmpteTt,
-    SpuPng,
-    DvdRaw, // See -d at http://www.theneitherworld.com/mcpoodle/SCC_TOOLS/DOCS/SCC_TOOLS.HTML#CCExtract
-    WebVtt,
-    SimpleXml,
-    G608,
-    Curl,
-    Ssa,
-    Mcc,
-    Scc,
-    Ccd,
-}
-// Provides common constant types throughout the codebase.
-// Rust equivalent for `ccx_common_constants.c` file in C.
-//
-// # Conversion Guide
-//
-// | From                           | To                                         |
-// |--------------------------------|--------------------------------------------|
-// | `ccx_avc_nal_types`            | [`AvcNalType`]                             |
-// | `ccx_stream_type`              | [`StreamType`]                             |
-// | `ccx_mpeg_descriptor`          | [`MpegDescriptor`]                         |
-// | `ccx_datasource`               | [`DataSource`]                             |
-// | `ccx_output_format`            | [`OutputFormat`]                           |
-// | `ccx_stream_mode_enum`         | [`StreamMode`]                             |
-// | `ccx_bufferdata_type`          | [`BufferdataType`]                         |
-// | `ccx_frame_type`               | [`FrameType`]                              |
-// | `ccx_code_type`                | [`Codec`]                                  |
-// | `cdp_section_type`             | [`CdpSectionType`]                         |
-// | `cc_types[4]`                  | [`CCTypes`]                                |
-// | `CCX_TXT_*` macros             | [`CcxTxt`]                                 |
-// | `language[NB_LANGUAGE]`        | [`Language`]                               |
-// | `DEF_VAL_*` macros             | [`CreditTiming`]                           |
-// | `IS_FEASIBLE` macro            | [`Codec::is_feasible`]                     |
-// | `IS_VALID_TELETEXT_DESC` macro | [`MpegDescriptor::is_valid_teletext_desc`] |
 
 // RCWT header (11 bytes):
 // byte(s)   value   description (All values below are hex numbers, not
@@ -143,7 +117,6 @@ pub const SLICE_TYPES: [&str; 10] = [
     "0 - P", "1 - B", "2 - I", "3 - SP", "4 - SI", "5 - P", "6 - B", "7 - I", "8 - SP", "9 - SI",
 ];
 
-pub const CCX_DECODER_608_SCREEN_WIDTH: usize = 32;
 pub const ONEPASS: usize = 120; // Bytes we can always look ahead without going out of limits
 pub const BUFSIZE: usize = 2048 * 1024 + ONEPASS; // 2 Mb plus the safety pass
 pub const MAX_CLOSED_CAPTION_DATA_PER_PICTURE: usize = 32;
@@ -191,9 +164,7 @@ pub enum AvcNalType {
 }
 
 // MPEG-2 TS stream types
-#[derive(Default, Debug, PartialEq, Eq, FromRepr, Clone, Copy)]
 pub enum StreamType {
-    #[default]
     Unknownstream = 0,
     /*
     The later constants are defined by MPEG-TS standard
@@ -238,18 +209,36 @@ pub enum MpegDescriptor {
     DataComp = 0xfd, // Consider to change DESC to DSC
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum DataSource {
-    #[default]
     File,
     Stdin,
     Network,
     Tcp,
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+/// An enum of all the available formats for the subtitle output.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum OutputFormat {
+    Raw,
+    Srt,
+    Sami,
+    Transcript,
+    Rcwt,
+    Null,
+    SmpteTt,
+    SpuPng,
+    DvdRaw, // See -d at http://www.theneitherworld.com/mcpoodle/SCC_TOOLS/DOCS/SCC_TOOLS.HTML#CCExtract
+    WebVtt,
+    SimpleXml,
+    G608,
+    Curl,
+    Ssa,
+    Mcc,
+    Scc,
+    Ccd,
+}
+
 pub enum StreamMode {
-    #[default]
     ElementaryOrNotFound = 0,
     Transport = 1,
     Program = 2,
@@ -284,20 +273,22 @@ pub enum BufferdataType {
     DvdSubtitle,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FrameType {
+    ResetOrUnknown,
+    IFrame,
+    PFrame,
+    BFrame,
+    DFrame,
+}
+
+#[derive(PartialEq, Eq)]
 pub enum Codec {
     Any,
     Teletext,
     Dvb,
     IsdbCc,
     AtscCc,
-}
-
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-pub enum SelectCodec {
-    All,
-    Some(Codec),
-    #[default]
     None,
 }
 
@@ -325,10 +316,7 @@ pub enum CcxTxt {
     InUse = 2, // Positive auto-detected, or forced, etc
 }
 
-#[derive(Debug, Default, EnumString, Clone, Copy, PartialEq, Eq)]
-#[strum(serialize_all = "lowercase")]
 pub enum Language {
-    #[default]
     Und, // Undefined
     Eng,
     Afr,

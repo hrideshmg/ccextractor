@@ -506,7 +506,8 @@
 #  define png_aligncastconst(type, value) ((const void*)(value))
 #endif /* __cplusplus */
 
-#if defined(PNG_FLOATING_POINT_SUPPORTED) || defined(PNG_FLOATING_ARITHMETIC_SUPPORTED)
+#if defined(PNG_FLOATING_POINT_SUPPORTED) ||\
+    defined(PNG_FLOATING_ARITHMETIC_SUPPORTED)
    /* png.c requires the following ANSI-C constants if the conversion of
     * floating point to ASCII is implemented therein:
     *
@@ -514,13 +515,10 @@
     *  DBL_MIN  Smallest normalized fp number (can be set to an arbitrary value)
     *  DBL_MAX  Maximum floating point number (can be set to an arbitrary value)
     */
-
 #  include <float.h>
 
-   /* Handle floating-point headers depending on the platform */
-#  if ((defined(__MWERKS__) && defined(macintosh)) || defined(applec) || \
-       defined(THINK_C) || defined(__SC__) || defined(TARGET_OS_MAC)) && \
-      !(defined(__APPLE__) && defined(__MACH__)) // this if block gets executed for older macOS versions
+#  if (defined(__MWERKS__) && defined(macintosh)) || defined(applec) || \
+    defined(THINK_C) || defined(__SC__) || defined(TARGET_OS_MAC)
    /* We need to check that <math.h> hasn't already been included earlier
     * as it seems it doesn't agree with <fp.h>, yet we should really use
     * <fp.h> if possible.
@@ -528,19 +526,15 @@
 #    if !defined(__MATH_H__) && !defined(__MATH_H) && !defined(__cmath__)
 #      include <fp.h>
 #    endif
-#  else // this if block gets executed for newer macOS versions(Ventura/Sonoma/Sequoia) OR other platforms
-    /* if (defined(__APPLE__) && defined(__MACH__)) or other cases */
-    /* Include math.h for macOS and all other platforms */
+#  else
 #    include <math.h>
 #  endif
-
 #  if defined(_AMIGA) && defined(__SASC) && defined(_M68881)
    /* Amiga SAS/C: We must include builtin FPU functions when compiling using
     * MATH=68881
     */
 #    include <m68881.h>
 #  endif
-
 #endif
 
 /* This provides the non-ANSI (far) memory allocation routines. */

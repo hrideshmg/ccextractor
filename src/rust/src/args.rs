@@ -104,12 +104,6 @@ Notes on adding credits:
   to display the message for at least the specified time.
 
 Notes on the CEA-708 decoder:
-	By default, ccextractor now extracts both CEA-608 and CEA-708 subtitles
-	if they are present in the input. This results in two output files: one
-	for CEA-608 and one for CEA-708.
-	To extract only CEA-608 subtitles, use -1, -2, or -12.
-	To extract only CEA-708 subtitles, use -svc.
-	To extract both CEA-608 and CEA-708 subtitles, use both -1/-2/-12 and -svc.
   While it is starting to be useful, it's
   a work in progress. A number of things don't work yet in the decoder
   itself, and many of the auxiliary tools (case conversion to name one)
@@ -129,7 +123,7 @@ Notes on spupng output format:
     input.d/sub0001.png
     ...
   The command:
-    ccextractor --out=spupng -o /tmp/output --output-field both input.mpg
+    ccextractor --out=spupng -o /tmp/output --12 input.mpg
   will create the files:
     /tmp/output_1.xml
     /tmp/output_1.d/sub0000.png
@@ -162,7 +156,7 @@ pub struct Args {
     pub pesheader: bool,
     /// Write the DVB subtitle debug traces to console.
     #[arg(long, help_heading=FILE_NAME_RELATED_OPTIONS)]
-    pub debugdvbsub: bool,
+    pub debugdvdsub: bool,
     /// Ignore PTS jumps (default).
     #[arg(long, help_heading=FILE_NAME_RELATED_OPTIONS)]
     pub ignoreptsjumps: bool,
@@ -211,11 +205,8 @@ pub struct Args {
     /// captions e.g. channel name or file name
     #[arg(long, value_name="port", verbatim_doc_comment, help_heading=NETWORK_SUPPORT)]
     pub tcp_description: Option<String>,
-    /// Values: 1 = Output Field 1
-    ///         2 = Output Field 2
-    ///         both = Both Output Field 1 and 2
-    /// Defaults to 1
-    #[arg(long, value_name="field", verbatim_doc_comment, help_heading=OPTION_AFFECT_PROCESSED)]
+    /// Output field1 data, field2 data, or both
+    #[arg(long, value_name="1/2/both", verbatim_doc_comment, help_heading=OPTION_AFFECT_PROCESSED)]
     pub output_field: Option<String>,
     /// Use --append to prevent overwriting of existing files. The output will be
     /// appended instead.
@@ -481,7 +472,7 @@ pub struct Args {
     /// white). This causes all output in .srt/.smi/.vtt
     /// files to have a font tag, which makes the files
     /// larger. Add the color you want in RGB, such as
-    /// --defaultcolor #FF0000 for red.
+    /// --dc #FF0000 for red.
     #[arg(long, verbatim_doc_comment, help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
     pub defaultcolor: Option<String>,
     /// Sentence capitalization. Use if you hate
@@ -567,8 +558,8 @@ pub struct Args {
     #[arg(long, verbatim_doc_comment, value_name="x", help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
     pub xmltvoutputinterval: Option<String>,
     /// Only print current events for xmltv output.
-    #[arg(long, verbatim_doc_comment, help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
-    pub xmltvonlycurrent: bool,
+    #[arg(long, verbatim_doc_comment, value_name="x", help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
+    pub xmltvonlycurrent: Option<String>,
     /// Create a .sem file for each output file that is open
     /// and delete it on file close.
     #[arg(long, verbatim_doc_comment, help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
@@ -595,7 +586,7 @@ pub struct Args {
     /// 1: Use CCExtractor's internal function (default).
     /// 2: Reduce distinct color count in image for faster results.
     #[arg(long, verbatim_doc_comment, value_name="mode", help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
-    pub quant: Option<u8>,
+    pub quant: Option<i32>,
     /// Select the OEM mode for Tesseract.
     /// Available modes :
     /// 0: OEM_TESSERACT_ONLY - the fastest mode.
@@ -605,26 +596,7 @@ pub struct Args {
     /// Tesseract v3 : default mode is 0,
     /// Tesseract v4 : default mode is 1.
     #[arg(long, verbatim_doc_comment, value_name="mode", help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
-    pub oem: Option<u8>,
-    /// Select the PSM mode for Tesseract.
-    /// Available Page segmentation modes:
-    /// 0    Orientation and script detection (OSD) only.
-    /// 1    Automatic page segmentation with OSD.
-    /// 2    Automatic page segmentation, but no OSD, or OCR.
-    /// 3    Fully automatic page segmentation, but no OSD. (Default)
-    /// 4    Assume a single column of text of variable sizes.
-    /// 5    Assume a single uniform block of vertically aligned text.
-    /// 6    Assume a single uniform block of text.
-    /// 7    Treat the image as a single text line.
-    /// 8    Treat the image as a single word.
-    /// 9    Treat the image as a single word in a circle.
-    /// 10    Treat the image as a single character.
-    /// 11    Sparse text. Find as much text as possible in no particular order.
-    /// 12    Sparse text with OSD.
-    /// 13    Raw line. Treat the image as a single text line,
-    /// bypassing hacks that are Tesseract-specific.
-    #[arg(long, verbatim_doc_comment, value_name="mode", help_heading=OUTPUT_AFFECTING_OUTPUT_FILES)]
-    pub psm: Option<u8>,
+    pub oem: Option<i32>,
     /// For MKV subtitles, select which language's caption
     /// stream will be processed. e.g. 'eng' for English.
     /// Language codes can be either the 3 letters bibliographic
@@ -725,13 +697,13 @@ pub struct Args {
     /// --codec teletext
     ///     select the teletext subtitle from elementary stream
     #[arg(long, verbatim_doc_comment, value_name="value", help_heading=OUTPUT_AFFECTING_CODEC)]
-    pub codec: Option<CCXCodec>,
+    pub codec: Option<Codec>,
     /// --no-codec dvbsub
     ///     ignore dvb subtitle and follow default behaviour
     /// --no-codec teletext
     ///     ignore teletext subtitle
     #[arg(long, verbatim_doc_comment, conflicts_with="codec", value_name="value", help_heading=OUTPUT_AFFECTING_CODEC)]
-    pub no_codec: Option<CCXCodec>,
+    pub no_codec: Option<Codec>,
     /// Write this text as start credits. If there are
     /// several lines, separate them with the
     /// characters \n, for example Line1\nLine 2.
@@ -956,7 +928,7 @@ pub struct Args {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum CCXCodec {
+pub enum Codec {
     Dvbsub,
     Teletext,
 }
@@ -1032,7 +1004,6 @@ pub enum OutFormat {
     /// Prints to stdout information about captions in specified input.
     /// Don't produce any file output.
     Report,
-    SimpleXml,
     #[cfg(feature = "with_libcurl")]
     /// POST plain transcription frame-by-frame to a
     /// URL specified by --curlposturl. Don't produce

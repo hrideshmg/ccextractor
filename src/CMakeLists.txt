@@ -1,7 +1,5 @@
-cmake_minimum_required (VERSION 3.24.0)
+cmake_minimum_required (VERSION 3.0.2)
 project (CCExtractor)
-
-include (CTest)
 
 option (WITH_FFMPEG "Build using FFmpeg demuxer and decoder" OFF)
 option (WITH_OCR "Build with OCR (Optical Character Recognition) feature" OFF)
@@ -257,7 +255,9 @@ add_executable (ccextractor ${SOURCEFILE} ${FREETYPE_SOURCE} ${UTF8PROC_SOURCE})
 
 if (PKG_CONFIG_FOUND AND NOT WITHOUT_RUST)
   add_subdirectory (rust)
-  set (EXTRA_LIBS ${EXTRA_LIBS} ccx_rust)
+  get_target_property(RUST_LIB ccx_rust LOCATION)
+  set (EXTRA_LIBS ${EXTRA_LIBS} ${RUST_LIB})
+  add_dependencies(ccextractor ccx_rust)
 else ()
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DDISABLE_RUST")
 endif (PKG_CONFIG_FOUND AND NOT WITHOUT_RUST)

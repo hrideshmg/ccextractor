@@ -154,13 +154,10 @@ void parse_ebml(FILE *file)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping EBML block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -235,13 +232,10 @@ void parse_segment_info(FILE *file)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment info block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -495,13 +489,10 @@ void parse_segment_cluster_block_group(struct matroska_ctx *mkv_ctx, ULLONG clus
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment cluster block group\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -606,13 +597,10 @@ void parse_segment_cluster(struct matroska_ctx *mkv_ctx)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment cluster block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -740,7 +728,6 @@ void parse_segment_track_entry(struct matroska_ctx *mkv_ctx)
 	enum matroska_track_entry_type track_type = MATROSKA_TRACK_TYPE_VIDEO;
 	char *lang = strdup("eng");
 	char *header = NULL;
-	char *lang_ietf = NULL;
 	char *codec_id_string = NULL;
 	enum matroska_track_subtitle_codec_id codec_id = MATROSKA_TRACK_SUBTITLE_CODEC_ID_UTF8;
 
@@ -876,31 +863,6 @@ void parse_segment_track_entry(struct matroska_ctx *mkv_ctx)
 			case MATROSKA_SEGMENT_TRACK_TRICK_MASTER_TRACK_SEGMENT_UID:
 				read_vint_block_skip(file);
 				MATROSKA_SWITCH_BREAK(code, code_len);
-			case MATROSKA_SEGMENT_TRACK_LANGUAGE_IETF:
-				lang_ietf = read_vint_block_string(file);
-				mprint("    Language IETF: %s\n", lang_ietf);
-				// We'll store this for later use rather than freeing it immediately
-				if (track_type == MATROSKA_TRACK_TYPE_SUBTITLE)
-				{
-					// Don't free lang_ietf here, store in track
-					if (lang != NULL)
-					{
-						// If we previously allocated lang, free it as we'll prefer IETF
-						free(lang);
-						lang = NULL;
-					}
-					// Default to "eng" if we somehow don't have a language yet
-					if (lang == NULL)
-					{
-						lang = strdup("eng");
-					}
-				}
-				else
-				{
-					free(lang_ietf); // Free if not a subtitle track
-					lang_ietf = NULL;
-				}
-				MATROSKA_SWITCH_BREAK(code, code_len);
 
 				/* Misc ids */
 			case MATROSKA_VOID:
@@ -912,13 +874,10 @@ void parse_segment_track_entry(struct matroska_ctx *mkv_ctx)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment track entry block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -929,7 +888,6 @@ void parse_segment_track_entry(struct matroska_ctx *mkv_ctx)
 		struct matroska_sub_track *sub_track = malloc(sizeof(struct matroska_sub_track));
 		sub_track->header = header;
 		sub_track->lang = lang;
-		sub_track->lang_ietf = lang_ietf;
 		sub_track->track_number = track_number;
 		sub_track->lang_index = 0;
 		sub_track->codec_id = codec_id;
@@ -946,8 +904,6 @@ void parse_segment_track_entry(struct matroska_ctx *mkv_ctx)
 	else
 	{
 		free(lang);
-		if (lang_ietf)
-			free(lang_ietf);
 		if (codec_id_string)
 			free(codec_id_string);
 	}
@@ -1041,13 +997,10 @@ void parse_segment_tracks(struct matroska_ctx *mkv_ctx)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment tracks block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -1105,13 +1058,10 @@ void parse_segment(struct matroska_ctx *mkv_ctx)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping segment block\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					set_bytes(file, pos + len);
+					return;
 				}
 				break;
 		}
@@ -1121,15 +1071,11 @@ void parse_segment(struct matroska_ctx *mkv_ctx)
 char *generate_filename_from_track(struct matroska_ctx *mkv_ctx, struct matroska_sub_track *track)
 {
 	char *buf = malloc(sizeof(char) * 200);
-	// Use lang_ietf if available, otherwise fall back to lang
-	const char *lang_to_use = track->lang_ietf ? track->lang_ietf : track->lang;
-
 	if (track->lang_index == 0)
-		sprintf(buf, "%s_%s.%s", get_basename(mkv_ctx->filename), lang_to_use,
-			matroska_track_text_subtitle_id_extensions[track->codec_id]);
+		sprintf(buf, "%s_%s.%s", get_basename(mkv_ctx->filename), track->lang, matroska_track_text_subtitle_id_extensions[track->codec_id]);
 	else
-		sprintf(buf, "%s_%s_" LLD ".%s", get_basename(mkv_ctx->filename), lang_to_use,
-			track->lang_index, matroska_track_text_subtitle_id_extensions[track->codec_id]);
+		sprintf(buf, "%s_%s_" LLD ".%s", get_basename(mkv_ctx->filename), track->lang, track->lang_index,
+			matroska_track_text_subtitle_id_extensions[track->codec_id]);
 	return buf;
 }
 
@@ -1317,8 +1263,6 @@ void free_sub_track(struct matroska_sub_track *track)
 		free(track->header);
 	if (track->lang != NULL)
 		free(track->lang);
-	if (track->lang_ietf != NULL)
-		free(track->lang_ietf);
 	if (track->codec_id_string != NULL)
 		free(track->codec_id_string);
 	for (int i = 0; i < track->sentence_count; i++)
@@ -1337,12 +1281,7 @@ void matroska_save_all(struct matroska_ctx *mkv_ctx, char *lang)
 	{
 		if (lang)
 		{
-			// Try to match against IETF tag first if available
-			if (mkv_ctx->sub_tracks[i]->lang_ietf &&
-			    (match = strstr(lang, mkv_ctx->sub_tracks[i]->lang_ietf)) != NULL)
-				save_sub_track(mkv_ctx, mkv_ctx->sub_tracks[i]);
-			// Fall back to 3-letter code
-			else if ((match = strstr(lang, mkv_ctx->sub_tracks[i]->lang)) != NULL)
+			if ((match = strstr(lang, mkv_ctx->sub_tracks[i]->lang)) != NULL)
 				save_sub_track(mkv_ctx, mkv_ctx->sub_tracks[i]);
 		}
 		else
@@ -1398,13 +1337,9 @@ void matroska_parse(struct matroska_ctx *mkv_ctx)
 			default:
 				if (code_len == MATROSKA_MAX_ID_LENGTH)
 				{
-					mprint(MATROSKA_WARNING "Unknown element 0x%x at position " LLD ", skipping this element\n", code,
+					mprint(MATROSKA_ERROR "Unknown element 0x%x at position " LLD ", skipping file parsing\n", code,
 					       get_current_byte(file) - MATROSKA_MAX_ID_LENGTH);
-					// Skip just the unknown element, not the entire block
-					read_vint_block_skip(file);
-					// Reset code and code_len to start fresh with next element
-					code = 0;
-					code_len = 0;
+					return;
 				}
 				break;
 		}

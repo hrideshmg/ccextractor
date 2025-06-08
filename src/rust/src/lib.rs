@@ -12,8 +12,9 @@
 pub mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
-
+pub mod activity;
 pub mod args;
+pub mod ccx_encoders_helpers;
 pub mod common;
 pub mod decoder;
 #[cfg(feature = "hardsubx_ocr")]
@@ -24,23 +25,20 @@ pub mod utils;
 
 #[cfg(windows)]
 use std::os::windows::io::{FromRawHandle, RawHandle};
+use std::{io::Write, os::raw::c_char, os::raw::c_int};
 
 use args::Args;
 use bindings::*;
 use clap::{error::ErrorKind, Parser};
-use common::{copy_from_rust, CType, CType2};
+use common::{CcxOptions, CcxTeletextConfig};
 use decoder::Dtvcc;
-use lib_ccxr::{common::Options, teletext::TeletextConfig, util::log::ExitCause};
-use parser::OptionsExt;
 use utils::is_true;
 
 use env_logger::{builder, Target};
 use log::{warn, LevelFilter};
-use std::{
-    ffi::CStr,
-    io::Write,
-    os::raw::{c_char, c_double, c_int, c_long, c_uint},
-};
+use std::ffi::CStr;
+
+use crate::common::ExitCode;
 
 #[cfg(test)]
 static mut cb_708: c_int = 0;
@@ -56,24 +54,9 @@ extern "C" {
     static mut cb_field2: c_int;
 }
 
-#[allow(dead_code)]
 extern "C" {
-    static mut usercolor_rgb: [c_int; 8];
-    static mut FILEBUFFERSIZE: c_int;
     static mut MPEG_CLOCK_FREQ: c_int;
     static mut tlt_config: ccx_s_teletext_config;
-    static mut ccx_options: ccx_s_options;
-    static mut pts_big_change: c_uint;
-    static mut current_fps: c_double;
-    static mut frames_since_ref_time: c_int;
-    static mut total_frames_count: c_uint;
-    static mut gop_time: gop_time_code;
-    static mut first_gop_time: gop_time_code;
-    static mut fts_at_gop_start: c_long;
-    static mut gop_rollover: c_int;
-    static mut ccx_common_timing_settings: ccx_common_timing_settings_t;
-    static mut capitalization_list: word_list;
-    static mut profane: word_list;
 }
 
 /// Initialize env logger with custom format, using stdout as target
@@ -173,11 +156,7 @@ pub fn do_cb(ctx: &mut lib_cc_decode, dtvcc: &mut Dtvcc, cc_block: &[u8]) -> boo
             0 | 1 => {}
             // Type 2 and 3 are for CEA-708 data.
             2 | 3 => {
-                let current_time = if ctx.timing.is_null() {
-                    0
-                } else {
-                    unsafe { (*ctx.timing).get_fts(ctx.current_field as u8) }
-                };
+                let current_time = unsafe { (*ctx.timing).get_fts(ctx.current_field as u8) };
                 ctx.current_field = 3;
 
                 // Check whether current time is within start and end bounds
@@ -218,7 +197,6 @@ extern "C" fn ccxr_close_handle(handle: RawHandle) {
 
 extern "C" {
     fn version(location: *const c_char);
-    #[allow(dead_code)]
     fn set_binary_mode();
 }
 
@@ -227,7 +205,11 @@ extern "C" {
 ///
 /// Parse parameters from argv and argc
 #[no_mangle]
-pub unsafe extern "C" fn ccxr_parse_parameters(argc: c_int, argv: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn ccxr_parse_parameters(
+    mut _options: *mut ccx_s_options,
+    argc: c_int,
+    argv: *mut *mut c_char,
+) -> c_int {
     // Convert argv to Vec<String> and pass it to parse_parameters
     let args = std::slice::from_raw_parts(argv, argc as usize)
         .iter()
@@ -240,7 +222,7 @@ pub unsafe extern "C" fn ccxr_parse_parameters(argc: c_int, argv: *mut *mut c_ch
         .collect::<Vec<String>>();
 
     if args.len() <= 1 {
-        return ExitCause::NoInputFiles.exit_code();
+        return ExitCode::NoInputFiles as _;
     }
 
     let args: Args = match Args::try_parse_from(args) {
@@ -252,50 +234,34 @@ pub unsafe extern "C" fn ccxr_parse_parameters(argc: c_int, argv: *mut *mut c_ch
                 ErrorKind::DisplayHelp => {
                     // Print the help string
                     println!("{}", e);
-                    return ExitCause::WithHelp.exit_code();
+                    return ExitCode::WithHelp as _;
                 }
                 ErrorKind::DisplayVersion => {
                     version(*argv);
-                    return ExitCause::WithHelp.exit_code();
+                    return ExitCode::WithHelp as _;
                 }
                 ErrorKind::UnknownArgument => {
                     println!("Unknown Argument");
                     println!("{}", e);
-                    return ExitCause::MalformedParameter.exit_code();
+                    return 1;
                 }
                 _ => {
                     println!("{}", e);
-                    return ExitCause::Failure.exit_code();
+                    return 1;
                 }
             }
         }
     };
 
-    let mut _capitalization_list: Vec<String> = Vec::new();
-    let mut _profane: Vec<String> = Vec::new();
+    let mut opt = CcxOptions::default();
+    let mut _tlt_config = CcxTeletextConfig::default();
 
-    let mut opt = Options::default();
-    let mut _tlt_config = TeletextConfig::default();
-
-    opt.parse_parameters(
-        &args,
-        &mut _tlt_config,
-        &mut _capitalization_list,
-        &mut _profane,
-    );
-    tlt_config = _tlt_config.to_ctype(&opt);
-
+    opt.parse_parameters(&args, &mut _tlt_config);
+    tlt_config = _tlt_config.to_ctype();
     // Convert the rust struct (CcxOptions) to C struct (ccx_s_options), so that it can be used by the C code
-    copy_from_rust(&raw mut ccx_options, opt);
+    opt.to_ctype(_options);
 
-    if !_capitalization_list.is_empty() {
-        capitalization_list = _capitalization_list.to_ctype();
-    }
-    if !_profane.is_empty() {
-        profane = _profane.to_ctype();
-    }
-
-    ExitCause::Ok.exit_code()
+    0
 }
 
 #[cfg(test)]

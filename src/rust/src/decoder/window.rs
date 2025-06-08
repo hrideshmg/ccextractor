@@ -12,7 +12,7 @@
 
 use std::{
     alloc::{alloc_zeroed, dealloc, Layout},
-    ptr::copy_nonoverlapping,
+    intrinsics::copy_nonoverlapping,
 };
 
 use super::timing::get_time_str;

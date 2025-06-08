@@ -1,7 +1,7 @@
 use std::convert::TryInto;
-use std::ffi::c_int;
 use std::fmt::Write;
 use std::num::TryFromIntError;
+use std::os::raw::c_int;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use derive_more::{Add, Neg, Sub};
@@ -19,7 +19,7 @@ extern "C" {
 /// Represents a timestamp in milliseconds.
 ///
 /// The number can be negetive.
-#[derive(Default, Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Add, Sub, Neg)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Add, Sub, Neg)]
 pub struct Timestamp {
     millis: i64,
 }
@@ -40,7 +40,6 @@ pub enum TimestampError {
 }
 
 /// Represents the different string formats for [`Timestamp`].
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub enum TimestampFormat {
     /// Format: blank string.
     ///
@@ -51,7 +50,6 @@ pub enum TimestampFormat {
     /// let output = timestamp.to_formatted_time(TimestampFormat::None).unwrap();
     /// assert_eq!(output, "");
     /// ```
-    #[default]
     None,
 
     /// Format: `{hour:02}:{minute:02}:{second:02}`.
@@ -109,17 +107,6 @@ pub enum TimestampFormat {
     HHMMSSFFF,
 }
 
-impl TimestampFormat {
-    /// Returns the millis_separator for the TimestampFormat
-    pub fn millis_separator(&self) -> char {
-        match self {
-            TimestampFormat::Seconds { millis_separator } => *millis_separator,
-            TimestampFormat::Date { millis_separator } => *millis_separator,
-            _ => ',',
-        }
-    }
-}
-
 impl Timestamp {
     /// Create a new [`Timestamp`] based on the number of milliseconds since the Unix Epoch.
     pub fn now() -> Timestamp {
@@ -168,7 +155,7 @@ impl Timestamp {
     ///
     /// # Examples
     /// ```rust
-    /// # use lib_ccxr::time::units::Timestamp;
+    /// # use lib_ccxr::time::units::Timestamp;;
     /// let timestamp = Timestamp::from_millis(6524365);
     /// assert_eq!(timestamp.millis(), 6524365);
     /// ```
@@ -180,7 +167,7 @@ impl Timestamp {
     ///
     /// # Examples
     /// ```rust
-    /// # use lib_ccxr::time::units::Timestamp;
+    /// # use lib_ccxr::time::units::Timestamp;;
     /// let timestamp = Timestamp::from_millis(6524365);
     /// assert_eq!(timestamp.seconds(), 6524);
     /// ```
@@ -194,7 +181,7 @@ impl Timestamp {
     ///
     /// # Examples
     /// ```rust
-    /// # use lib_ccxr::time::units::Timestamp;
+    /// # use lib_ccxr::time::units::Timestamp;;
     /// let timestamp = Timestamp::from_millis(6524365);
     /// assert_eq!(timestamp.as_sec_millis().unwrap(), (6524, 365));
     /// ```
@@ -212,7 +199,7 @@ impl Timestamp {
     ///
     /// # Examples
     /// ```rust
-    /// # use lib_ccxr::time::units::Timestamp;
+    /// # use lib_ccxr::time::units::Timestamp;;
     /// let timestamp = Timestamp::from_millis(6524365);
     /// assert_eq!(timestamp.as_hms_millis().unwrap(), (1, 48, 44, 365));
     /// ```
@@ -395,18 +382,6 @@ impl Timestamp {
         let mut s = String::new();
         self.write_hms_millis_time(&mut s, sep)?;
         Ok(s)
-    }
-
-    /// SCC time formatting
-    pub fn to_scc_time(&self) -> Result<String, TimestampError> {
-        let mut result = String::new();
-
-        let (h, m, s, _) = self.as_hms_millis()?;
-        let frame = (self.millis - 1000 * (s + 60 * (m + 60 * h)) as i64) as f64 * 29.97 / 1000.0;
-
-        write!(result, "{:02}:{:02}:{:02};{:02}", h, m, s, frame)?;
-
-        Ok(result)
     }
 
     /// Returns a formatted [`Timestamp`] using ctime's format.

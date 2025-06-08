@@ -10,12 +10,9 @@ mod timing;
 mod tv_screen;
 mod window;
 
-use lib_ccxr::{
-    debug, fatal,
-    util::log::{DebugMessageFlag, ExitCause},
-};
-
 use crate::{bindings::*, utils::is_true};
+
+use log::{debug, warn};
 
 const CCX_DTVCC_MAX_PACKET_LENGTH: u8 = 128;
 const CCX_DTVCC_NO_LAST_SEQUENCE: i32 = -1;
@@ -44,35 +41,24 @@ pub struct Dtvcc<'a> {
 impl<'a> Dtvcc<'a> {
     /// Create a new dtvcc context
     pub fn new(ctx: &'a mut dtvcc_ctx) -> Self {
-        let report = if !ctx.report.is_null() {
-            unsafe { Box::new(*(ctx.report)) }
-        } else {
-            Box::new(ccx_decoder_dtvcc_report::default())
-        };
-        let encoder = if !ctx.encoder.is_null() {
-            unsafe { Box::new(*(ctx.encoder as *mut encoder_ctx)) }
-        } else {
-            Box::new(encoder_ctx::default())
-        };
-        let timing = if !ctx.timing.is_null() {
-            unsafe { Box::new(*(ctx.timing)) }
-        } else {
-            Box::new(ccx_common_timing_ctx::default())
-        };
+        let report = unsafe { &mut *ctx.report };
+        let encoder = unsafe { &mut *(ctx.encoder as *mut encoder_ctx) };
+        let timing = unsafe { &mut *ctx.timing };
+
         Self {
             is_active: is_true(ctx.is_active),
             active_services_count: ctx.active_services_count as u8,
             services_active: ctx.services_active.to_vec(),
             report_enabled: is_true(ctx.report_enabled),
-            report: Box::leak(report),
+            report,
             decoders: ctx.decoders.iter_mut().collect(),
             packet: ctx.current_packet.to_vec(),
             packet_length: ctx.current_packet_length as u8,
             is_header_parsed: is_true(ctx.is_current_packet_header_parsed),
             last_sequence: ctx.last_sequence,
-            encoder: Box::leak(encoder),
+            encoder,
             no_rollup: is_true(ctx.no_rollup),
-            timing: Box::leak(timing),
+            timing,
         }
     }
     /// Process cc data and add it to the dtvcc packet
@@ -85,10 +71,10 @@ impl<'a> Dtvcc<'a> {
             // type 0 and 1 are for CEA 608 data and are handled before calling this function
             // valid types for CEA 708 data are only 2 and 3
             2 => {
-                debug!( msg_type = DebugMessageFlag::DECODER_708; "dtvcc_process_data: DTVCC Channel Packet Data");
+                debug!("dtvcc_process_data: DTVCC Channel Packet Data");
                 if cc_valid == 1 && self.is_header_parsed {
                     if self.packet_length > 253 {
-                        debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_data: Warning: Legal packet size exceeded (1), data not added.");
+                        warn!("dtvcc_process_data: Warning: Legal packet size exceeded (1), data not added.");
                     } else {
                         self.add_data_to_packet(data1, data2);
 
@@ -109,13 +95,13 @@ impl<'a> Dtvcc<'a> {
                 }
             }
             3 => {
-                debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_data: DTVCC Channel Packet Start");
+                debug!("dtvcc_process_data: DTVCC Channel Packet Start");
                 if cc_valid == 1 {
                     if self.packet_length > (CCX_DTVCC_MAX_PACKET_LENGTH - 1) {
-                        debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_data: Warning: Legal packet size exceeded (2), data not added.");
+                        warn!("dtvcc_process_data: Warning: Legal packet size exceeded (2), data not added.");
                     } else {
                         if self.is_header_parsed {
-                            debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_data: Warning: Incorrect packet length specified. Packet will be skipped.");
+                            warn!("dtvcc_process_data: Warning: Incorrect packet length specified. Packet will be skipped.");
                             self.clear_packet();
                         }
                         self.add_data_to_packet(data1, data2);
@@ -123,7 +109,7 @@ impl<'a> Dtvcc<'a> {
                     }
                 }
             }
-            _ => fatal!(cause = ExitCause::Bug;
+            _ => warn!(
                 "dtvcc_process_data: shouldn't be here - cc_type: {}",
                 cc_type
             ),
@@ -140,7 +126,6 @@ impl<'a> Dtvcc<'a> {
     pub fn process_current_packet(&mut self, len: u8) {
         let seq = (self.packet[0] & 0xC0) >> 6;
         debug!(
-            msg_type = DebugMessageFlag::DECODER_708;
             "dtvcc_process_current_packet: Sequence: {}, packet length: {}",
             seq, len
         );
@@ -153,7 +138,7 @@ impl<'a> Dtvcc<'a> {
         if self.last_sequence != CCX_DTVCC_NO_LAST_SEQUENCE
             && (self.last_sequence + 1) % 4 != seq as i32
         {
-            debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_current_packet: Unexpected sequence number, it is {} but should be {}", seq, (self.last_sequence +1) % 4);
+            warn!("dtvcc_process_current_packet: Unexpected sequence number, it is {} but should be {}", seq, (self.last_sequence +1) % 4);
         }
         self.last_sequence = seq as i32;
 
@@ -161,7 +146,7 @@ impl<'a> Dtvcc<'a> {
         while pos < len {
             let mut service_number = (self.packet[pos as usize] & 0xE0) >> 5; // 3 more significant bits
             let block_length = self.packet[pos as usize] & 0x1F; // 5 less significant bits
-            debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_current_packet: Standard header Service number: {}, Block length: {}", service_number, block_length);
+            debug!("dtvcc_process_current_packet: Standard header Service number: {}, Block length: {}", service_number, block_length);
 
             if service_number == 7 {
                 // There is an extended header
@@ -169,7 +154,7 @@ impl<'a> Dtvcc<'a> {
                 pos += 1;
                 service_number = self.packet[pos as usize] & 0x3F; // 6 more significant bits
                 if service_number > 7 {
-                    debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_current_packet: Illegal service number in extended header: {}", service_number);
+                    warn!("dtvcc_process_current_packet: Illegal service number in extended header: {}", service_number);
                 }
             }
 
@@ -202,7 +187,7 @@ impl<'a> Dtvcc<'a> {
 
         if len < 128 && self.packet[pos as usize] != 0 {
             // Null header is mandatory if there is room
-            debug!(msg_type = DebugMessageFlag::DECODER_708;"dtvcc_process_current_packet: Warning: Null header expected but not found.");
+            warn!("dtvcc_process_current_packet: Warning: Null header expected but not found.");
         }
     }
     /// Clear current packet
@@ -224,7 +209,7 @@ impl dtvcc_symbol {
     }
     /// Create a new 16 bit symbol
     pub fn new_16(data1: u8, data2: u8) -> Self {
-        let sym = ((data1 as u16) << 8) | data2 as u16;
+        let sym = (data1 as u16) << 8 | data2 as u16;
         Self { init: 1, sym }
     }
     /// Check if symbol is initialized
@@ -248,20 +233,12 @@ impl PartialEq for dtvcc_symbol {
 
 #[cfg(test)]
 mod test {
-    use lib_ccxr::util::log::{set_logger, CCExtractorLogger, DebugMessageMask, OutputTarget};
-
     use crate::utils::get_zero_allocated_obj;
 
     use super::*;
 
     #[test]
     fn test_process_cc_data() {
-        set_logger(CCExtractorLogger::new(
-            OutputTarget::Stdout,
-            DebugMessageMask::new(DebugMessageFlag::VERBOSE, DebugMessageFlag::VERBOSE),
-            false,
-        ))
-        .ok();
         let mut dtvcc_ctx = get_zero_allocated_obj::<dtvcc_ctx>();
         let mut decoder = Dtvcc::new(&mut dtvcc_ctx);
 
@@ -300,17 +277,11 @@ mod test {
 
         assert_eq!(decoder.packet, vec![0xC2, 0x23, 0x45, 0x67, 0x01, 0x02]);
         assert_eq!(decoder.packet_length, 6);
-        assert!(decoder.is_header_parsed);
+        assert_eq!(decoder.is_header_parsed, true);
     }
 
     #[test]
     fn test_process_current_packet() {
-        set_logger(CCExtractorLogger::new(
-            OutputTarget::Stdout,
-            DebugMessageMask::new(DebugMessageFlag::VERBOSE, DebugMessageFlag::VERBOSE),
-            false,
-        ))
-        .ok();
         let mut dtvcc_ctx = get_zero_allocated_obj::<dtvcc_ctx>();
         let mut decoder = Dtvcc::new(&mut dtvcc_ctx);
 
