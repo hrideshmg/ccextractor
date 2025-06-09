@@ -34,7 +34,7 @@ jobs:
           msbuild-architecture: x64
       - name: Download and install GPAC
         run: |
-          $gpacInstaller = "gpac-0.8.0-rev1-gc1990d5c-master-x64.exe"
+          $gpacInstaller = "gpac-2.4-rev0-g5d70253a-master-x64.exe"
           Invoke-WebRequest -Uri "https://github.com/hrideshmg/ccextractor/releases/download/temp/$gpacInstaller" -OutFile $gpacInstaller
           Start-Process -FilePath ".\$gpacInstaller" -ArgumentList "/S" -Wait
           echo "C:\Program Files\GPAC" | Out-File -Append -Encoding ascii $env:GITHUB_PATH
