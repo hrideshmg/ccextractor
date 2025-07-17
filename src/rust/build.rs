@@ -1,6 +1,6 @@
 extern crate pkg_config;
 use std::env;
-use std::path::PathBuf;
+use std::path::PathBuf;;
 
 fn main() {
     let mut allowlist_functions = Vec::new();
